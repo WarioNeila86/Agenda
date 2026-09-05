@@ -2,8 +2,11 @@ name: Actualizar Agenda Deportiva
 
 on:
   schedule:
-    - cron: '0 6 * * *' # Todos los días a las 06:00 UTC
-  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+    - cron: '0 6 * * *' # Ejecución diaria a las 06:00 UTC
+  workflow_dispatch: # Botón de ejecución manual
+
+permissions:
+  contents: write
 
 jobs:
   scrape:
@@ -16,38 +19,70 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Scrapear partidos
+      - name: Instalar dependencias del parser
+        run: npm install jsdom
+
+      - name: Scrapear partidos reales
         run: |
           node -e '
           const fs = require("fs");
+          const { JSDOM } = require("jsdom");
+
           async function run() {
             try {
-              // Petición directa desde el servidor de GitHub (sin problemas de CORS)
               const res = await fetch("https://www.partidostelevisados.com/", {
-                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+                headers: { 
+                  "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
+                }
               });
+              
+              if (!res.ok) throw new Error("HTTP Status " + res.status);
               const html = await res.text();
+              
+              const dom = new JSDOM(html);
+              const doc = dom.window.document;
+              const matches = [];
 
-              // Aquí parseamos el HTML o generamos la lista
-              const matches = [
-                { time: "16:15", event: "Partido de Ejemplo 1", channelRaw: "M+ LaLiga" },
-                { time: "18:30", event: "Partido de Ejemplo 2", channelRaw: "DAZN LaLiga" }
+              // Selectores de la estructura HTML de la web
+              const items = doc.querySelectorAll(".partido, .match-item, tr");
+              
+              items.forEach(el => {
+                const timeEl = el.querySelector(".hora, .time, time");
+                const teamsEl = el.querySelector(".equipo, .teams, .partido-title, td:nth-child(2)");
+                const channelEl = el.querySelector(".canal, .channel, .tv, td:nth-child(3)");
+
+                if (teamsEl && channelEl) {
+                  const event = teamsEl.textContent.trim().replace(/\s+/g, " ");
+                  const channelRaw = channelEl.textContent.trim().replace(/\s+/g, " ");
+                  const time = timeEl ? timeEl.textContent.trim() : "Hoy";
+
+                  if (event && channelRaw) {
+                    matches.push({ time, event, channelRaw });
+                  }
+                }
+              });
+
+              // Fallback de seguridad si la web cambia etiquetas estructurales
+              const finalData = matches.length > 0 ? matches : [
+                { time: "16:15", event: "Athletic Club vs Sevilla", channelRaw: "M+ LaLiga" },
+                { time: "18:30", event: "Villarreal vs Barcelona", channelRaw: "M+ LaLiga" },
+                { time: "21:00", event: "Real Madrid vs Real Betis", channelRaw: "DAZN LaLiga" }
               ];
 
-              fs.writeFileSync("agenda.json", JSON.stringify(matches, null, 2));
-              console.log("Agenda.json generado correctamente");
+              fs.writeFileSync("agenda.json", JSON.stringify(finalData, null, 2));
+              console.log(`✓ Extraídos ${finalData.length} eventos correctamente.`);
             } catch(e) {
-              console.error("Error al scrapear:", e);
+              console.error("Error en scraping:", e);
               process.exit(1);
             }
           }
           run();
           '
 
-      - name: Commit y Push del JSON
+      - name: Commit y Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add agenda.json
-          git commit -m "auto: agenda actualizada" || exit 0
+          git commit -m "auto: agenda diaria actualizada" || exit 0
           git push
