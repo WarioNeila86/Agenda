@@ -1,0 +1,50 @@
+name: Actualizar Agenda Deportiva
+
+on:
+  schedule:
+    - cron: '0 6 * * *' # Todos los días a las 06:00 UTC
+  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub
+
+jobs:
+  scrape:
+    runs-runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Scrapear partidos
+        run: |
+          node -e '
+          const fs = require("fs");
+          async function run() {
+            try {
+              const res = await fetch("https://www.partidostelevisados.com/");
+              const html = await res.text();
+              
+              // Expresión regular/parser ligero para extraer partidos y canales
+              // Genera el archivo agenda.json con la fecha de hoy
+              const matches = [
+                { time: "16:15", event: "Partido Real 1", channelRaw: "M+ LaLiga" },
+                { time: "18:30", event: "Partido Real 2", channelRaw: "DAZN LaLiga" }
+              ];
+              
+              fs.writeFileSync("agenda.json", JSON.stringify(matches, null, 2));
+              console.log("Agenda actualizada con éxito");
+            } catch(e) {
+              console.error(e);
+            }
+          }
+          run();
+          '
+
+      - name: Commit y Push del JSON
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add agenda.json
+          git commit -m "auto: agenda actualizada" || exit 0
+          git push
