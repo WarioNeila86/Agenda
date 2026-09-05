@@ -7,14 +7,14 @@ on:
 
 jobs:
   scrape:
-    runs-runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
 
       - name: Scrapear partidos
         run: |
@@ -22,20 +22,23 @@ jobs:
           const fs = require("fs");
           async function run() {
             try {
-              const res = await fetch("https://www.partidostelevisados.com/");
+              // Petición directa desde el servidor de GitHub (sin problemas de CORS)
+              const res = await fetch("https://www.partidostelevisados.com/", {
+                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+              });
               const html = await res.text();
-              
-              // Expresión regular/parser ligero para extraer partidos y canales
-              // Genera el archivo agenda.json con la fecha de hoy
+
+              // Aquí parseamos el HTML o generamos la lista
               const matches = [
-                { time: "16:15", event: "Partido Real 1", channelRaw: "M+ LaLiga" },
-                { time: "18:30", event: "Partido Real 2", channelRaw: "DAZN LaLiga" }
+                { time: "16:15", event: "Partido de Ejemplo 1", channelRaw: "M+ LaLiga" },
+                { time: "18:30", event: "Partido de Ejemplo 2", channelRaw: "DAZN LaLiga" }
               ];
-              
+
               fs.writeFileSync("agenda.json", JSON.stringify(matches, null, 2));
-              console.log("Agenda actualizada con éxito");
+              console.log("Agenda.json generado correctamente");
             } catch(e) {
-              console.error(e);
+              console.error("Error al scrapear:", e);
+              process.exit(1);
             }
           }
           run();
