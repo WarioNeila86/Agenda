@@ -1,12 +1,17 @@
 [
   {
     "time": "16:15",
-    "event": "Partido de Ejemplo 1",
+    "event": "Athletic Club vs Sevilla",
     "channelRaw": "M+ LaLiga"
   },
   {
     "time": "18:30",
-    "event": "Partido de Ejemplo 2",
+    "event": "Villarreal vs Barcelona",
+    "channelRaw": "M+ LaLiga"
+  },
+  {
+    "time": "21:00",
+    "event": "Real Madrid vs Real Betis",
     "channelRaw": "DAZN LaLiga"
   }
 ]
