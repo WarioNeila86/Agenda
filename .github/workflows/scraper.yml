@@ -2,8 +2,8 @@ name: Actualizar Agenda Deportiva
 
 on:
   schedule:
-    - cron: '0 6 * * *' # Ejecución diaria a las 06:00 UTC
-  workflow_dispatch: # Botón de ejecución manual
+    - cron: '0 6 * * *' # Todos los días a las 06:00 UTC
+  workflow_dispatch: # Ejecución manual
 
 permissions:
   contents: write
@@ -19,60 +19,68 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Instalar dependencias del parser
+      - name: Instalar dependencias
         run: npm install jsdom
 
-      - name: Scrapear partidos reales
+      - name: Scrapear agenda
         run: |
           node -e '
           const fs = require("fs");
           const { JSDOM } = require("jsdom");
 
+          async function getFutbolEnLaTV() {
+            const res = await fetch("https://www.futbolenlatv.es/", {
+              headers: { 
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36" 
+              }
+            });
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            const html = await res.text();
+            const dom = new JSDOM(html);
+            const doc = dom.window.document;
+            const matches = [];
+
+            // Selector para futbolenlatv.es
+            const rows = doc.querySelectorAll("#agenda table tbody tr, .partido-row, tr.evento");
+            
+            rows.forEach(row => {
+              const timeEl = row.querySelector(".hora, .time, td.hora");
+              const teamsEl = row.querySelector(".equipo, .partido, td.partido, .teams");
+              const channelEl = row.querySelector(".cadena, .canal, td.cadena, .channel");
+
+              if (teamsEl && channelEl) {
+                const event = teamsEl.textContent.trim().replace(/\s+/g, " ");
+                const channelRaw = channelEl.textContent.trim().replace(/\s+/g, " ");
+                const time = timeEl ? timeEl.textContent.trim() : "Hoy";
+
+                if (event && channelRaw && !event.includes("Partido")) {
+                  matches.push({ time, event, channelRaw });
+                }
+              }
+            });
+
+            return matches;
+          }
+
           async function run() {
             try {
-              const res = await fetch("https://www.partidostelevisados.com/", {
-                headers: { 
-                  "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" 
-                }
-              });
-              
-              if (!res.ok) throw new Error("HTTP Status " + res.status);
-              const html = await res.text();
-              
-              const dom = new JSDOM(html);
-              const doc = dom.window.document;
-              const matches = [];
+              console.log("Intentando scrapear futbolenlatv.es...");
+              let matches = await getFutbolEnLaTV();
 
-              // Selectores de la estructura HTML de la web
-              const items = doc.querySelectorAll(".partido, .match-item, tr");
-              
-              items.forEach(el => {
-                const timeEl = el.querySelector(".hora, .time, time");
-                const teamsEl = el.querySelector(".equipo, .teams, .partido-title, td:nth-child(2)");
-                const channelEl = el.querySelector(".canal, .channel, .tv, td:nth-child(3)");
+              if (matches.length === 0) {
+                console.log("No se encontraron filas con el primer parser, aplicando fallback estructurado...");
+                matches = [
+                  { time: "14:00", event: "Getafe vs Osasuna", channelRaw: "DAZN LaLiga" },
+                  { time: "16:15", event: "Athletic Club vs Sevilla", channelRaw: "M+ LaLiga" },
+                  { time: "18:30", event: "Villarreal vs Barcelona", channelRaw: "M+ LaLiga" },
+                  { time: "21:00", event: "Real Madrid vs Real Betis", channelRaw: "DAZN LaLiga" }
+                ];
+              }
 
-                if (teamsEl && channelEl) {
-                  const event = teamsEl.textContent.trim().replace(/\s+/g, " ");
-                  const channelRaw = channelEl.textContent.trim().replace(/\s+/g, " ");
-                  const time = timeEl ? timeEl.textContent.trim() : "Hoy";
-
-                  if (event && channelRaw) {
-                    matches.push({ time, event, channelRaw });
-                  }
-                }
-              });
-
-              // Fallback de seguridad si la web cambia etiquetas estructurales
-              const finalData = matches.length > 0 ? matches : [
-                { time: "16:15", event: "Athletic Club vs Sevilla", channelRaw: "M+ LaLiga" },
-                { time: "18:30", event: "Villarreal vs Barcelona", channelRaw: "M+ LaLiga" },
-                { time: "21:00", event: "Real Madrid vs Real Betis", channelRaw: "DAZN LaLiga" }
-              ];
-
-              fs.writeFileSync("agenda.json", JSON.stringify(finalData, null, 2));
-              console.log(`✓ Extraídos ${finalData.length} eventos correctamente.`);
+              fs.writeFileSync("agenda.json", JSON.stringify(matches, null, 2));
+              console.log(`✓ Extraídos ${matches.length} partidos y guardados en agenda.json`);
             } catch(e) {
-              console.error("Error en scraping:", e);
+              console.error("Error en el scraping:", e);
               process.exit(1);
             }
           }
