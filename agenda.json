@@ -1,0 +1,12 @@
+[
+  {
+    "time": "16:15",
+    "event": "Partido de Ejemplo 1",
+    "channelRaw": "M+ LaLiga"
+  },
+  {
+    "time": "18:30",
+    "event": "Partido de Ejemplo 2",
+    "channelRaw": "DAZN LaLiga"
+  }
+]
